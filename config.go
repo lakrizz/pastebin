@@ -6,6 +6,7 @@ import (
 
 // Config ...
 type Config struct {
-	expiry time.Duration
-	fqdn   string
+	permstore bool
+	expiry    time.Duration
+	fqdn      string
 }

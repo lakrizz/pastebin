@@ -103,9 +103,14 @@ func (s *Server) IndexHandler() httprouter.Handle {
 			return
 		}
 
+		entries := make(map[string]string)
+		for k, v := range s.store.Items() {
+			entries[k] = v.Object.(*Paste).Date.Format("[2006-01-02] 15:04:05") // wow this is fucking offensive, maybe revise
+		}
+
 		switch accepts {
 		case "text/html":
-			s.render("index", w, nil)
+			s.render("index", w, entries)
 		case "text/plain":
 		default:
 		}
@@ -129,8 +134,15 @@ func (s *Server) PasteHandler() httprouter.Handle {
 			return
 		}
 
-		uuid := shortuuid.NewWithNamespace(s.config.fqdn)
-		s.store.Set(uuid, string(body), cache.DefaultExpiration)
+		uuid := shortuuid.New()
+		s.logger.Println(uuid)
+
+		paste := &Paste{Body: string(body), Date: time.Now()}
+		s.store.Set(uuid, paste, cache.DefaultExpiration)
+
+		if s.config.permstore {
+			s.store.SaveFile("store.db")
+		}
 
 		u, err := url.Parse(fmt.Sprintf("./p/%s", uuid))
 		if err != nil {
@@ -193,15 +205,15 @@ func (s *Server) ViewHandler() httprouter.Handle {
 			return
 		}
 
-		blob := rawBlob.(string)
-		blob = strings.ReplaceAll(blob, "\t", "    ")
+		blob := rawBlob.(*Paste)
+		s.logger.Println(blob)
 
 		switch accepts {
 		case "text/html":
 			s.render(
 				"view", w,
 				struct {
-					Blob string
+					Blob *Paste
 					UUID string
 				}{
 					Blob: blob,
@@ -209,9 +221,9 @@ func (s *Server) ViewHandler() httprouter.Handle {
 				},
 			)
 		case "text/plain":
-			w.Write([]byte(blob))
+			w.Write([]byte(blob.Body))
 		default:
-			w.Write([]byte(blob))
+			w.Write([]byte(blob.Body))
 		}
 	}
 }
@@ -276,6 +288,14 @@ func NewServer(bind string, config Config) *Server {
 		stats:    stats.New(),
 	}
 
+	if cfg.permstore {
+		err := server.store.LoadFile("store.db")
+		if err != nil {
+			panic(err)
+			return nil
+		}
+	}
+
 	// Templates
 	box := rice.MustFindBox("templates")
 
@@ -292,5 +312,6 @@ func NewServer(bind string, config Config) *Server {
 
 	server.initRoutes()
 
+	server.logger.Println(fmt.Sprintf("listening on %s", bind))
 	return server
 }

@@ -14,4 +14,12 @@
     </div>
   </div>
 </section>
+<section>
+	<h3>latest pastes</h3>
+	<ul>
+	{{ range $k, $v := . }}
+	<li><a href="/p/{{$k}}">{{ $v }}</a></li>
+	{{ end }}
+	</ul>
+</section>
 {{end}}
